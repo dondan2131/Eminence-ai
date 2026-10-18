@@ -12,6 +12,75 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Repair main.py
+        shell: bash
+        run: |
+          n=$(grep -n "^    def _done(self, reply, err):" main.py | tail -n 1 | cut -d: -f1 || true)
+          if [ -z "$n" ]; then echo "Brak _done w main.py"; wc -l main.py; tail -n 5 main.py; exit 1; fi
+          head -n $((n-1)) main.py > main_fixed.py
+          cat >> main_fixed.py <<'TAIL'
+              def _done(self, reply, err):
+                  self.busy = False
+                  self.refresh_status()
+                  if err:
+                      self.append_log("BŁĄD", err)
+                  else:
+                      self.append_log("THE EMINENCE AI", reply)
+                      self.voice.speak(reply)
+                      self._save_history()
+
+              # --- mikrofon (desktop, wymaga SpeechRecognition + PyAudio) ---
+              def listen(self, instance):
+                  if sr is None:
+                      self.append_log("SYSTEM", "Mikrofon w aplikacji nie jest jeszcze dostępny. "
+                                                "Użyj ikony mikrofonu na klawiaturze telefonu.")
+                      return
+                  if self.busy:
+                      return
+                  self.refresh_status("SŁUCHAM...")
+                  threading.Thread(target=self._listen_worker, daemon=True).start()
+
+              def _listen_worker(self):
+                  r = sr.Recognizer()
+                  try:
+                      with sr.Microphone() as source:
+                          r.adjust_for_ambient_noise(source, duration=0.4)
+                          audio = r.listen(source, timeout=6, phrase_time_limit=15)
+                      text = r.recognize_google(audio, language="pl-PL")
+                      Clock.schedule_once(lambda dt: self._heard(text))
+                  except Exception as e:
+                      err = f"Mikrofon: {e}"
+                      Clock.schedule_once(lambda dt: (self.refresh_status(), self.append_log("SYSTEM", err)))
+
+              def _heard(self, text):
+                  self.refresh_status()
+                  self.run_text(text)
+
+
+          class EminenceGenesisMasterApp(App):
+              def build(self):
+                  self.title = "The Eminence AI"
+                  self.cfg = Config(os.path.join(self.user_data_dir, "eminence_config.json"))
+                  self.voice = EminenceVoiceEngine()
+                  self.root_box = FloatLayout()
+                  self.splash = GenesisBootSplash(on_finish_callback=self.load_command_center)
+                  self.root_box.add_widget(self.splash)
+                  return self.root_box
+
+              def load_command_center(self):
+                  self.root_box.clear_widgets()
+                  self.root_box.add_widget(GenesisCommandCenter(self.voice, self.cfg))
+
+              def on_stop(self):
+                  self.splash.cancel_events()
+                  self.voice.shutdown()
+
+
+          if __name__ == "__main__":
+              EminenceGenesisMasterApp().run()
+          TAIL
+          mv main_fixed.py main.py
+          python3 -m py_compile main.py && echo "main.py OK ($(wc -l < main.py) linii)"
       - name: Install dependencies
         run: |
           sudo apt-get update
