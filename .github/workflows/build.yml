@@ -118,15 +118,11 @@ jobs:
           timeout 75m buildozer android debug > build.log 2>&1
           rc=$?
           if [ "$rc" -ne 0 ]; then
-            n=$(grep -n "Command failed" build.log | head -n 1 | cut -d: -f1)
-            total=$(wc -l < build.log)
-            [ -z "$n" ] && n=$total
-            s=$((n-80))
-            [ "$s" -lt 1 ] && s=1
-            echo "=== PRZED BLEDEM (linia $n z $total) ==="
-            sed -n "${s},${n}p" build.log | cut -c1-220
-            echo "=== SZCZEGOLY ==="
-            grep -n -E "FAILURE|What went wrong|BUILD FAILED|Traceback|aidl|No such file|Exception" build.log | tail -n 15 | cut -c1-220
+            echo "=== ZADANIA KTORE SIE NIE UDALY ==="
+            grep -n -E "Execution failed for task|A problem occurred|Could not (find|resolve|get|determine)|SDK location|build-tools|No such file" build.log | tail -n 12 | cut -c1-200
+            echo "=== GRADLE: CO POSZLO NIE TAK ==="
+            grep -n -A 22 "What went wrong" build.log | head -n 60 | cut -c1-200
+            echo "=== KONIEC ==="
             exit 1
           fi
       - uses: actions/upload-artifact@v4
