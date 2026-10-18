@@ -12,6 +12,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - name: Repair main.py
         shell: bash
         run: |
@@ -114,6 +118,7 @@ jobs:
           log_level = 2
           warn_on_root = 1
           EOF
+          echo "JAVA: $(java -version 2>&1 | head -n 1) | JAVA_HOME=$JAVA_HOME"
           set +e
           timeout 75m buildozer android debug > build.log 2>&1
           rc=$?
