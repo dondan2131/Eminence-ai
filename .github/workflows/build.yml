@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,7 +45,21 @@ jobs:
           log_level = 2
           warn_on_root = 1
           EOF
-          buildozer android debug > build.log 2>&1 || { echo "=== OSTATNIE LINIE ==="; tail -n 40 build.log; echo "=== BLEDY ==="; grep -n -i -E "error|failed|not found" build.log | tail -n 15; exit 1; }
+          set +e
+          timeout 75m buildozer android debug > build.log 2>&1
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            n=$(grep -n "Command failed" build.log | head -n 1 | cut -d: -f1)
+            total=$(wc -l < build.log)
+            [ -z "$n" ] && n=$total
+            s=$((n-80))
+            [ "$s" -lt 1 ] && s=1
+            echo "=== PRZED BLEDEM (linia $n z $total) ==="
+            sed -n "${s},${n}p" build.log | cut -c1-220
+            echo "=== SZCZEGOLY ==="
+            grep -n -E "FAILURE|What went wrong|BUILD FAILED|Traceback|aidl|No such file|Exception" build.log | tail -n 15 | cut -c1-220
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: eminence-ai-apk
